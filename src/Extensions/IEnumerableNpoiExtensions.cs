@@ -3,8 +3,8 @@
 namespace NPOI.Extension
 {
     using System;
-	using System.Globalization;
-	using System.Linq;
+    using System.Globalization;
+    using System.Linq;
     using System.Collections.Generic;
     using System.IO;
     using System.Reflection;
@@ -87,20 +87,20 @@ namespace NPOI.Extension
                 // get the property config
                 if (fluentConfigEnabled && fluentConfig.PropertyConfigs.TryGetValue(property, out var pc))
                 {
-					// fluent configure first(Hight Priority)
+                    // fluent configure first(Hight Priority)
                     cellConfigs[j] = pc.CellConfig;
                 }
                 else
                 {
-					var attrs = property.GetCustomAttributes(typeof(ColumnAttribute), true) as ColumnAttribute[];
-					if (attrs != null && attrs.Length > 0)
-					{
+                    var attrs = property.GetCustomAttributes(typeof(ColumnAttribute), true) as ColumnAttribute[];
+                    if (attrs != null && attrs.Length > 0)
+                    {
                         cellConfigs[j] = attrs[0].CellConfig;
-					}
-					else
-					{
-						cellConfigs[j] = null;
-					}
+                    }
+                    else
+                    {
+                        cellConfigs[j] = null;
+                    }
                 }
             }
 
@@ -122,150 +122,176 @@ namespace NPOI.Extension
             titleStyle.FillForegroundColor = HSSFColor.White.Index;
 
             var titleRow = sheet.CreateRow(0);
+            var sheetRowIndex = 1;
             var rowIndex = 1;
             foreach (var item in source)
             {
-                var row = sheet.CreateRow(rowIndex);
+                // if using xls data over 65535 then create new sheet
+                if (!Excel.Setting.UserXlsx && sheetRowIndex % 65535 == 0)
+                {
+                    var sheetCound = sheetRowIndex / 65535;
+                    sheet = workbook.CreateSheet(sheetName + sheetCound.ToString());
+                    titleRow = sheet.CreateRow(0);
+                    sheetRowIndex = 1;
+                }
+
+                var row = sheet.CreateRow(sheetRowIndex);
                 for (var i = 0; i < properties.Length; i++)
                 {
                     var property = properties[i];
 
-					int index = i;
-					var config = cellConfigs[i];
-					if (config != null)
-					{
-						if (config.IsIgnored)
-							continue;
+                    int index = i;
+                    var config = cellConfigs[i];
+                    if (config != null)
+                    {
+                        if (config.IsIgnored)
+                            continue;
 
-						index = config.Index;
-					}
+                        index = config.Index;
+                    }
 
                     // this is the first time.
-                    if (rowIndex == 1)
+                    if (sheetRowIndex == 1)
                     {
-						// if not title, using property name as title.
+                        // if not title, using property name as title.
                         var title = property.Name;
-						if (!string.IsNullOrEmpty(config.Title))
-						{
-							title = config.Title;
-						}
+                        if (!string.IsNullOrEmpty(config.Title))
+                        {
+                            title = config.Title;
+                        }
 
-						if (!string.IsNullOrEmpty(config.Formatter))
-						{
-							try
-							{
-								var style = workbook.CreateCellStyle();
+                        if (!string.IsNullOrEmpty(config.Formatter))
+                        {
+                            try
+                            {
+                                var style = workbook.CreateCellStyle();
 
-								var dataFormat = workbook.CreateDataFormat();
+                                var dataFormat = workbook.CreateDataFormat();
 
-								style.DataFormat = dataFormat.GetFormat(config.Formatter);
+                                style.DataFormat = dataFormat.GetFormat(config.Formatter);
 
-								cellStyles[i] = style;
-							}
-							catch (Exception ex)
-							{
-								// the formatter isn't excel supported formatter
-								System.Diagnostics.Debug.WriteLine(ex.ToString());
-							}
-						}
+                                cellStyles[i] = style;
+                            }
+                            catch (Exception ex)
+                            {
+                                // the formatter isn't excel supported formatter
+                                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                            }
+                        }
 
-						var titleCell = titleRow.CreateCell(index);
-						titleCell.CellStyle = titleStyle;
-						titleCell.SetCellValue(title);
+                        var titleCell = titleRow.CreateCell(index);
+                        titleCell.CellStyle = titleStyle;
+                        titleCell.SetCellValue(title);
                     }
 
                     var value = property.GetValue(item, null);
                     if (value == null)
                         continue;
-                    
+
                     var cell = row.CreateCell(index);
                     if (cellStyles.TryGetValue(i, out var cellStyle))
                     {
                         cell.CellStyle = cellStyle;
 
-						var unwrapType = property.PropertyType.UnwrapNullableType();
-						if (unwrapType == typeof(bool))
-						{
-							cell.SetCellValue((bool)value);
-						}
-						else if (unwrapType == typeof(DateTime))
-						{
-							cell.SetCellValue(Convert.ToDateTime(value));
-						}
-						else if (unwrapType == typeof(double))
-						{
-							cell.SetCellValue(Convert.ToDouble(value));
-						}
-						else if (value is IFormattable)
-						{
-							var fv = value as IFormattable;
-							cell.SetCellValue(fv.ToString(config.Formatter, CultureInfo.CurrentCulture));
-						}
-						else
-						{
+                        var unwrapType = property.PropertyType.UnwrapNullableType();
+                        if (unwrapType == typeof(bool))
+                        {
+                            cell.SetCellValue((bool)value);
+                        }
+                        else if (unwrapType == typeof(DateTime))
+                        {
+                            cell.SetCellValue(Convert.ToDateTime(value));
+                        }
+                        else if (unwrapType == typeof(double))
+                        {
+                            cell.SetCellValue(Convert.ToDouble(value));
+                        }
+                        else if (value is IFormattable)
+                        {
+                            var fv = value as IFormattable;
+                            cell.SetCellValue(fv.ToString(config.Formatter, CultureInfo.CurrentCulture));
+                        }
+                        else
+                        {
                             cell.SetCellValue(value.ToString());
-						}
-					}
-                    else if (value is IFormattable) 
+                        }
+                    }
+                    else if (value is IFormattable)
                     {
                         var fv = value as IFormattable;
                         cell.SetCellValue(fv.ToString(config.Formatter, CultureInfo.CurrentCulture));
                     }
-					else
-					{
-						cell.SetCellValue(value.ToString());
-					}
+                    else
+                    {
+                        cell.SetCellValue(value.ToString());
+                    }
                 }
 
                 rowIndex++;
+                sheetRowIndex++;
             }
 
-			// merge cells
-			var mergableConfigs = cellConfigs.Where(c => c != null && c.AllowMerge).ToList();
+            // merge cells
+            var mergableConfigs = cellConfigs.Where(c => c != null && c.AllowMerge).ToList();
             if (mergableConfigs.Any())
             {
-				// merge cell style
-				var vStyle = workbook.CreateCellStyle();
-				vStyle.VerticalAlignment = VerticalAlignment.Center;
+                // merge cell style
+                var vStyle = workbook.CreateCellStyle();
+                vStyle.VerticalAlignment = VerticalAlignment.Center;
 
                 foreach (var config in mergableConfigs)
                 {
-					object previous = null;
-					int rowspan = 0, row = 1;
-					for (row = 1; row < rowIndex; row++)
-					{
-						var value = sheet.GetRow(row).GetCellValue(config.Index);
-						if (object.Equals(previous, value) && value != null)
-						{
-							rowspan++;
-						}
-						else
-						{
-							if (rowspan > 1)
-							{
-								sheet.GetRow(row - rowspan).Cells[config.Index].CellStyle = vStyle;
-								sheet.AddMergedRegion(new CellRangeAddress(row - rowspan, row - 1, config.Index, config.Index));
-							}
-							rowspan = 1;
-							previous = value;
-						}
-					}
+                    object previous = null;
+                    int rowspan = 0, row = 1, sheetRow = 1;
+                    int sheetIndex = 0;
+                    var currentSheet = workbook.GetSheetAt(sheetIndex);
+                    for (row = 1; row < rowIndex; row++)
+                    {
+                        if (!Excel.Setting.UserXlsx && row % 65535 == 0)
+                        {
+                            if (rowspan > 1)
+                            {
+                                currentSheet.GetRow(sheetRow - rowspan).Cells[config.Index].CellStyle = vStyle;
+                                currentSheet.AddMergedRegion(new CellRangeAddress(sheetRow - rowspan, sheetRow - 1, config.Index, config.Index));
+                            }
+                            rowspan = 0;
+                            sheetRow = 1;
+                            sheetIndex++;
+                            currentSheet = workbook.GetSheetAt(sheetIndex);
+                        }
 
-					// in what case? -> all rows need to be merged
-					if (rowspan > 1)
-					{
-						sheet.GetRow(row - rowspan).Cells[config.Index].CellStyle = vStyle;
-						sheet.AddMergedRegion(new CellRangeAddress(row - rowspan, row - 1, config.Index, config.Index));
-					}
+                        var value = currentSheet.GetRow(sheetRow).GetCellValue(config.Index);
+                        if (object.Equals(previous, value) && value != null)
+                        {
+                            rowspan++;
+                        }
+                        else
+                        {
+                            if (rowspan > 1)
+                            {
+                                currentSheet.GetRow(sheetRow - rowspan).Cells[config.Index].CellStyle = vStyle;
+                                currentSheet.AddMergedRegion(new CellRangeAddress(sheetRow - rowspan, sheetRow - 1, config.Index, config.Index));
+                            }
+                            rowspan = 1;
+                            previous = value;
+                        }
+                        sheetRow++;
+                    }
+                    // in what case? -> all rows need to be merged
+                    if (rowspan > 1)
+                    {
+                        currentSheet.GetRow(sheetRow - rowspan).Cells[config.Index].CellStyle = vStyle;
+                        currentSheet.AddMergedRegion(new CellRangeAddress(sheetRow - rowspan, sheetRow - 1, config.Index, config.Index));
+                    }
                 }
             }
 
             if (rowIndex > 1)
             {
                 var statistics = new List<StatisticsConfig>();
-		        var filterConfigs = new List<FilterConfig>();
-		        var freezeConfigs = new List<FreezeConfig>();
-                if (fluentConfigEnabled) 
+                var filterConfigs = new List<FilterConfig>();
+                var freezeConfigs = new List<FreezeConfig>();
+                if (fluentConfigEnabled)
                 {
                     statistics.AddRange(fluentConfig.StatisticsConfigs);
                     freezeConfigs.AddRange(fluentConfig.FreezeConfigs);
@@ -274,26 +300,26 @@ namespace NPOI.Extension
                 else
                 {
                     var attributes = typeof(T).GetCustomAttributes(typeof(StatisticsAttribute), true) as StatisticsAttribute[];
-					if (attributes != null && attributes.Length > 0)
-					{
+                    if (attributes != null && attributes.Length > 0)
+                    {
                         foreach (var item in attributes)
                         {
                             statistics.Add(item.StatisticsConfig);
                         }
                     }
 
-					var freezes = typeof(T).GetCustomAttributes(typeof(FreezeAttribute), true) as FreezeAttribute[];
-					if (freezes != null && freezes.Length > 0)
-					{
+                    var freezes = typeof(T).GetCustomAttributes(typeof(FreezeAttribute), true) as FreezeAttribute[];
+                    if (freezes != null && freezes.Length > 0)
+                    {
                         foreach (var item in freezes)
                         {
                             freezeConfigs.Add(item.FreezeConfig);
                         }
                     }
 
-					var filters = typeof(T).GetCustomAttributes(typeof(FilterAttribute), true) as FilterAttribute[];
-					if (filters != null && filters.Length > 0)
-					{
+                    var filters = typeof(T).GetCustomAttributes(typeof(FilterAttribute), true) as FilterAttribute[];
+                    if (filters != null && filters.Length > 0)
+                    {
                         foreach (var item in filters)
                         {
                             filterConfigs.Add(item.FilterConfig);
@@ -301,32 +327,32 @@ namespace NPOI.Extension
                     }
                 }
 
-				// statistics row
-				foreach (var item in statistics)
-				{
-					var lastRow = sheet.CreateRow(rowIndex);
-					var cell = lastRow.CreateCell(0);
-					cell.SetCellValue(item.Name);
-					foreach (var column in item.Columns)
-					{
-						cell = lastRow.CreateCell(column);
-						cell.CellFormula = $"{item.Formula}({GetCellPosition(1, column)}:{GetCellPosition(rowIndex - 1, column)})";
-					}
+                // statistics row
+                foreach (var item in statistics)
+                {
+                    var lastRow = sheet.CreateRow(rowIndex);
+                    var cell = lastRow.CreateCell(0);
+                    cell.SetCellValue(item.Name);
+                    foreach (var column in item.Columns)
+                    {
+                        cell = lastRow.CreateCell(column);
+                        cell.CellFormula = $"{item.Formula}({GetCellPosition(1, column)}:{GetCellPosition(rowIndex - 1, column)})";
+                    }
 
-					rowIndex++;
-				}
+                    rowIndex++;
+                }
 
                 // set the freeze
                 foreach (var freeze in freezeConfigs)
-				{
-					sheet.CreateFreezePane(freeze.ColSplit, freeze.RowSplit, freeze.LeftMostColumn, freeze.TopRow);
-				}
+                {
+                    sheet.CreateFreezePane(freeze.ColSplit, freeze.RowSplit, freeze.LeftMostColumn, freeze.TopRow);
+                }
 
-				// set the auto filter
-				foreach (var filter in filterConfigs)
-				{
-					sheet.SetAutoFilter(new CellRangeAddress(filter.FirstRow, filter.LastRow ?? rowIndex, filter.FirstCol, filter.LastCol));
-				}
+                // set the auto filter
+                foreach (var filter in filterConfigs)
+                {
+                    sheet.SetAutoFilter(new CellRangeAddress(filter.FirstRow, filter.LastRow ?? rowIndex, filter.FirstCol, filter.LastCol));
+                }
             }
 
             // autosize the all columns
